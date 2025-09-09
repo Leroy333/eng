@@ -1,0 +1,56 @@
+export const theme = {
+  colors: {
+    primary: '#3E68FF',
+    dark: '#181818',
+    light: '#EAEAEB',
+    white: '#FFFFFF',
+    gray: '#666666',
+    lightGray: '#F5F5F5',
+    hoverGray: '#E5E5E5',
+  },
+  fonts: {
+    primary: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
+  },
+  borderRadius: {
+    small: '12px',
+    medium: '15px',
+    large: '20px',
+  },
+  spacing: {
+    xs: '8px',
+    sm: '12px',
+    md: '15px',
+    lg: '18px',
+    xl: '20px',
+    xxl: '25px',
+    xxxl: '30px',
+  },
+  fontSize: {
+    sm: '14px',
+    md: '15px',
+    base: '16px',
+    lg: '17px',
+    xl: '18px',
+    xxl: '22px',
+    xxxl: '32px',
+    huge: '48px',
+  },
+  fontWeight: {
+    normal: 400,
+    medium: 500,
+    semibold: 600,
+    bold: 700,
+  },
+  breakpoints: {
+    mobile: '480px',
+    tablet: '768px',
+    desktop: '1024px',
+    wide: '1200px',
+  },
+  media: {
+    mobile: '@media (max-width: 480px)',
+    tablet: '@media (max-width: 768px)',
+    desktop: '@media (min-width: 1024px)',
+    wide: '@media (min-width: 1200px)',
+  },
+}
