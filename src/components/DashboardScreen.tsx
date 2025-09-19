@@ -1,8 +1,11 @@
 import React from 'react'
 import styled from 'styled-components'
 import { useUnit } from 'effector-react'
-import { $newWordsCount, $topics, Topic } from '../store'
+import { $newWordsCount, $topics, Topic, loadTopicsFx } from '../store'
+import { loadWordsByTopicFx } from '../store/words'
+import { setCurrentPage, setSelectedTopicId } from '../store/app'
 import { Search, ArrowRight, Home, BookOpen, Trophy, Settings, User } from 'lucide-react'
+import { LoadingSpinner } from './LoadingSpinner'
 
 const DashboardContainer = styled.div`
   height: 100%;
@@ -260,6 +263,12 @@ const TopicName = styled.span`
   }
 `
 
+const TopicWordsCount = styled.span`
+  font-size: ${({ theme }) => theme.fontSize.sm};
+  color: ${({ theme }) => theme.colors.gray};
+  opacity: 0.8;
+`
+
 const BottomNav = styled.div`
   background: ${({ theme }) => theme.colors.dark};
   border-radius: ${({ theme }) => theme.borderRadius.large};
@@ -300,6 +309,25 @@ const NavItem = styled.div<{ $active?: boolean }>`
 export const DashboardScreen: React.FC = () => {
   const newWordsCount = useUnit($newWordsCount)
   const topics = useUnit($topics)
+  const isLoading = useUnit(loadTopicsFx.pending)
+
+  console.log('📊 DashboardScreen render:', { topics: topics.length, isLoading })
+
+  const handleTopicClick = (topicId: string) => {
+    console.log('🎯 Клик по теме:', topicId)
+    setSelectedTopicId(topicId)
+    loadWordsByTopicFx(topicId)
+    setCurrentPage('wordCards')
+  }
+
+  if (isLoading) {
+    console.log('⏳ Показываем индикатор загрузки...')
+    return (
+      <DashboardContainer>
+        <LoadingSpinner text="Загрузка тем..." />
+      </DashboardContainer>
+    )
+  }
 
   return (
     <DashboardContainer>
@@ -328,9 +356,12 @@ export const DashboardScreen: React.FC = () => {
         <TopicsTitle>learn words by topic</TopicsTitle>
         <TopicsGrid>
           {topics.map((topic: Topic) => (
-            <TopicItem key={topic.id}>
+            <TopicItem key={topic.id} onClick={() => handleTopicClick(topic.id)}>
               <TopicIcon>{topic.icon}</TopicIcon>
               <TopicName>{topic.name}</TopicName>
+              {topic.words_count && (
+                <TopicWordsCount>{topic.words_count} слов</TopicWordsCount>
+              )}
             </TopicItem>
           ))}
         </TopicsGrid>

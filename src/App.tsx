@@ -1,16 +1,30 @@
-import React from 'react'
 import { ThemeProvider } from 'styled-components'
+import { useUnit } from 'effector-react'
 import { DashboardScreen } from './components/DashboardScreen'
+import { WordCardScreen } from './components/WordCardScreen'
 import { GlobalStyles } from './styles/GlobalStyles'
 import { theme } from './styles/theme'
+import { $currentPage } from './store/app'
 
 function App() {
+  const currentPage = useUnit($currentPage)
+
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return <DashboardScreen />
+      case 'wordCards':
+        return <WordCardScreen />
+      default:
+        return <DashboardScreen />
+    }
+  }
 
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyles />
       <div className="app-container">
-        <DashboardScreen />
+        {renderCurrentPage()}
       </div>
     </ThemeProvider>
   )
