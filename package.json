@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:all": "npm run build:server && npm run build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "server": "node server.mjs",
-    "start": "npm run build && npm run server",
+    "start": "npm run build:all && npm run server",
     "bot": "node bot.js",
     "init-db": "node scripts/init-database.js",
     "migrate": "node scripts/migrate-to-database.js",
@@ -25,6 +27,7 @@
     "effector-react": "^22.5.0",
     "express": "^5.1.0",
     "lucide-react": "^0.294.0",
+    "multer": "^2.0.2",
     "node-fetch": "^3.3.2",
     "node-telegram-bot-api": "^0.66.0",
     "pg": "^8.16.3",
@@ -32,7 +35,8 @@
     "react-dom": "^18.2.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "styled-components": "^6.1.19"
+    "styled-components": "^6.1.19",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

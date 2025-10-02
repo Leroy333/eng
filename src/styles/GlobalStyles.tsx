@@ -33,9 +33,17 @@ export const GlobalStyles = createGlobalStyle`
     height: 812px;
     background-color: ${({ theme }) => theme.colors.dark};
     border-radius: 0;
-    overflow: hidden;
+    overflow: auto;
     box-shadow: 0 0 0 1px rgba(234, 234, 235, 0.1);
     position: relative;
+
+    /* Скрываем scrollbar */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+    
+    &::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Opera */
+    }
   }
 
   /* Мобильные устройства */

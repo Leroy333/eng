@@ -1,18 +1,23 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import styled from 'styled-components'
 import { useUnit } from 'effector-react'
-import { $newWordsCount, $topics, Topic, loadTopicsFx } from '../store'
+import { $topics, $filteredTopics, $searchQuery, $recommendedWordsCount, Topic, loadTopicsFx, setSearchQuery, loadRecommendedWords } from '../store'
 import { loadWordsByTopicFx } from '../store/words'
 import { setCurrentPage, setSelectedTopicId } from '../store/app'
+import { $topicsProgress, loadTopicsProgress } from '../store/progress'
+import { $importModalOpen, setImportModalOpen, importTopicFromExcel } from '../store/import'
 import { Search, ArrowRight, Home, BookOpen, Trophy, Settings, User } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
+import { ExcelImportModal } from './ExcelImportModal'
+import { AddTopicCardComponent } from './AddTopicCard'
 
 const DashboardContainer = styled.div`
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   padding: 0;
   background: ${({ theme }) => theme.colors.light};
+  overflow: hidden;
 `
 
 const Header = styled.div`
@@ -20,6 +25,7 @@ const Header = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.large};
   margin: ${({ theme }) => theme.spacing.xl} ${({ theme }) => theme.spacing.xl} 0 ${({ theme }) => theme.spacing.xl};
   padding: ${({ theme }) => theme.spacing.xxl};
+  flex-shrink: 0;
 
   ${({ theme }) => theme.media.mobile} {
     margin: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.md} 0 ${({ theme }) => theme.spacing.md};
@@ -85,6 +91,7 @@ const ProgressCard = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.large};
   margin: ${({ theme }) => theme.spacing.xl};
   padding: ${({ theme }) => theme.spacing.xxxl};
+  flex-shrink: 0;
 
   ${({ theme }) => theme.media.mobile} {
     margin: ${({ theme }) => theme.spacing.md};
@@ -159,6 +166,8 @@ const TopicsSection = styled.div`
   margin: 0 ${({ theme }) => theme.spacing.xl};
   padding: ${({ theme }) => theme.spacing.xxxl};
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 
   ${({ theme }) => theme.media.mobile} {
     margin: 0 ${({ theme }) => theme.spacing.md};
@@ -269,6 +278,41 @@ const TopicWordsCount = styled.span`
   opacity: 0.8;
 `
 
+const TopicProgressContainer = styled.div`
+  width: 100%;
+  margin-top: ${({ theme }) => theme.spacing.sm};
+`
+
+const TopicProgressBar = styled.div`
+  width: 100%;
+  height: 4px;
+  background: ${({ theme }) => theme.colors.lightGray};
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: ${({ theme }) => theme.spacing.xs};
+`
+
+const TopicProgressFill = styled.div<{ $percentage: number }>`
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+  width: ${({ $percentage }) => $percentage}%;
+  transition: width 0.3s ease;
+`
+
+const TopicProgressText = styled.div`
+  font-size: ${({ theme }) => theme.fontSize.sm};
+  color: ${({ theme }) => theme.colors.gray};
+  text-align: center;
+`
+
+const NoResultsMessage = styled.div`
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: ${({ theme }) => theme.spacing.xxl};
+  color: ${({ theme }) => theme.colors.gray};
+  font-size: ${({ theme }) => theme.fontSize.lg};
+`
+
 const BottomNav = styled.div`
   background: ${({ theme }) => theme.colors.dark};
   border-radius: ${({ theme }) => theme.borderRadius.large};
@@ -277,6 +321,7 @@ const BottomNav = styled.div`
   display: flex;
   justify-content: space-around;
   align-items: center;
+  flex-shrink: 0;
 
   ${({ theme }) => theme.media.mobile} {
     margin: ${({ theme }) => theme.spacing.md};
@@ -307,17 +352,59 @@ const NavItem = styled.div<{ $active?: boolean }>`
 `
 
 export const DashboardScreen: React.FC = () => {
-  const newWordsCount = useUnit($newWordsCount)
+  const newWordsCount = useUnit($recommendedWordsCount)
   const topics = useUnit($topics)
+  const filteredTopics = useUnit($filteredTopics)
+  const searchQuery = useUnit($searchQuery)
+  const topicsProgress = useUnit($topicsProgress)
   const isLoading = useUnit(loadTopicsFx.pending)
+  const importModalOpen = useUnit($importModalOpen)
 
-  console.log('📊 DashboardScreen render:', { topics: topics.length, isLoading })
+  console.log('📊 DashboardScreen render:', { topics: topics.length, isLoading, topicsProgress: topicsProgress.length })
+
+  // Загружаем прогресс для всех тем при монтировании компонента
+  useEffect(() => {
+    const userId = 1; // Временно используем ID 1, позже можно будет получать из контекста
+    console.log('🔄 Загружаем прогресс для пользователя:', userId)
+    loadTopicsProgress(userId)
+    loadRecommendedWords(userId)
+  }, [])
 
   const handleTopicClick = (topicId: string) => {
     console.log('🎯 Клик по теме:', topicId)
     setSelectedTopicId(topicId)
     loadWordsByTopicFx(topicId)
     setCurrentPage('wordCards')
+  }
+
+  const handleAddTopicClick = () => {
+    console.log('➕ Открываем модальное окно импорта')
+    setImportModalOpen(true)
+  }
+
+  const handleImportFile = async (file: File) => {
+    console.log('📁 Импортируем файл:', file.name)
+    await importTopicFromExcel(file)
+    // Список топиков обновится автоматически через store
+  }
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const query = event.target.value
+    console.log('🔍 Поисковый запрос:', query)
+    setSearchQuery(query)
+  }
+
+  const handleRecommendedWordsClick = () => {
+    console.log('🎯 Переходим к рекомендованным словам')
+    setSelectedTopicId(null) // Сбрасываем выбранный топик для смешанных карточек
+    setCurrentPage('wordCards')
+  }
+
+  // Функция для получения прогресса конкретной темы
+  const getTopicProgress = (topicId: string) => {
+    const progress = topicsProgress.find(progress => progress.topic_id === topicId)
+    console.log(`📈 Прогресс для темы ${topicId}:`, progress)
+    return progress
   }
 
   if (isLoading) {
@@ -335,7 +422,12 @@ export const DashboardScreen: React.FC = () => {
         <HeaderContent>
           <SearchBar>
             <SearchIcon size={20} />
-            <SearchInput type="text" placeholder="Find any topic" />
+            <SearchInput 
+              type="text" 
+              placeholder="Найти топик..." 
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
           </SearchBar>
         </HeaderContent>
       </Header>
@@ -344,26 +436,48 @@ export const DashboardScreen: React.FC = () => {
         <ProgressContent>
           <ProgressText>
             <ProgressNumber>{newWordsCount}</ProgressNumber>
-            <ProgressLabel>new words to learn</ProgressLabel>
+            <ProgressLabel>новых слов для изучения</ProgressLabel>
           </ProgressText>
-          <ProgressArrow>
+          <ProgressArrow onClick={handleRecommendedWordsClick}>
             <ArrowRight size={20} />
           </ProgressArrow>
         </ProgressContent>
       </ProgressCard>
 
       <TopicsSection>
-        <TopicsTitle>learn words by topic</TopicsTitle>
+        <TopicsTitle>Учи слова из топиков:</TopicsTitle>
         <TopicsGrid>
-          {topics.map((topic: Topic) => (
-            <TopicItem key={topic.id} onClick={() => handleTopicClick(topic.id)}>
-              <TopicIcon>{topic.icon}</TopicIcon>
-              <TopicName>{topic.name}</TopicName>
-              {topic.words_count && (
-                <TopicWordsCount>{topic.words_count} слов</TopicWordsCount>
-              )}
-            </TopicItem>
-          ))}
+          {filteredTopics.length > 0 ? (
+            <>
+              {filteredTopics.map((topic: Topic) => {
+                const progress = getTopicProgress(topic.id)
+                return (
+                  <TopicItem key={topic.id} onClick={() => handleTopicClick(topic.id)}>
+                    <TopicIcon>{topic.icon}</TopicIcon>
+                    <TopicName>{topic.name}</TopicName>
+                    {topic.words_count && (
+                      <TopicWordsCount>{topic.words_count} слов</TopicWordsCount>
+                    )}
+                    {progress && (
+                      <TopicProgressContainer>
+                        <TopicProgressBar>
+                          <TopicProgressFill $percentage={progress.progress_percentage} />
+                        </TopicProgressBar>
+                        <TopicProgressText>
+                          {progress.learned_words}/{progress.total_words} изучено
+                        </TopicProgressText>
+                      </TopicProgressContainer>
+                    )}
+                  </TopicItem>
+                )
+              })}
+              <AddTopicCardComponent onClick={handleAddTopicClick} />
+            </>
+          ) : (
+            <NoResultsMessage>
+              {searchQuery ? `Топики по запросу "${searchQuery}" не найдены` : 'Топики не найдены'}
+            </NoResultsMessage>
+          )}
         </TopicsGrid>
       </TopicsSection>
 
@@ -374,7 +488,7 @@ export const DashboardScreen: React.FC = () => {
         <NavItem>
           <BookOpen size={24} />
         </NavItem>
-        <NavItem>
+        <NavItem onClick={() => setCurrentPage('statistics')}>
           <Trophy size={24} />
         </NavItem>
         <NavItem>
@@ -384,6 +498,12 @@ export const DashboardScreen: React.FC = () => {
           <User size={24} />
         </NavItem>
       </BottomNav>
+
+      <ExcelImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleImportFile}
+      />
     </DashboardContainer>
   )
 }

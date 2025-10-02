@@ -5,6 +5,9 @@ export interface Topic {
   name: string;
   icon: string;
   emoji: string;
+  description?: string;
+  color?: string;
+  words_count?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -15,6 +18,12 @@ export interface Word {
   english: string;
   topic_id: string;
   difficulty_level: number;
+  pronunciation?: string;
+  example_sentence?: string;
+  usage_frequency?: number;
+  views_count?: number;
+  likes_count?: number;
+  is_archived?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -40,6 +49,7 @@ export interface UserProgress {
   incorrect_attempts: number;
   last_studied?: Date;
   mastery_level: number;
+  learned: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -72,6 +82,7 @@ export interface CreateUserProgressData {
   correct_attempts?: number;
   incorrect_attempts?: number;
   mastery_level?: number;
+  learned?: boolean;
 }
 
 export interface CreateStudySessionData {
@@ -89,6 +100,7 @@ export interface UpdateUserProgressData {
   incorrect_attempts?: number;
   mastery_level?: number;
   last_studied?: Date;
+  learned?: boolean;
 }
 
 export interface UpdateStudySessionData {
@@ -119,4 +131,20 @@ export interface TopicStats {
   words_studied: number;
   average_difficulty: number;
   mastery_percentage: number;
+}
+
+// Интерфейсы для прогресса
+export interface TopicProgress {
+  topic_id: string;
+  topic_name: string;
+  total_words: number;
+  learned_words: number;
+  studying_words: number;
+  progress_percentage: number;
+}
+
+export interface WordProgress {
+  word_id: string;
+  learned: boolean;
+  studying: boolean;
 }

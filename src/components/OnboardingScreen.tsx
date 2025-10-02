@@ -1,7 +1,5 @@
 import React from 'react'
 import styled, { keyframes } from 'styled-components'
-import { useUnit } from 'effector-react'
-import { $currentPage } from '../store/app'
 
 const slideUp = keyframes`
   from {
@@ -230,7 +228,6 @@ const StartButton = styled.button`
 const emojis = ['🎧', '🎬', '🚂', '🐕', '🎮', '☁️']
 
 export const OnboardingScreen: React.FC = () => {
-  const currentPage = useUnit($currentPage)
 
   const handleStart = () => {
     // Логика перехода к дашборду

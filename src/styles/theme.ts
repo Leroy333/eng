@@ -1,12 +1,18 @@
 export const theme = {
   colors: {
     primary: '#3E68FF',
+    primaryDark: '#2E52E6',
     dark: '#181818',
     light: '#EAEAEB',
     white: '#FFFFFF',
     gray: '#666666',
     lightGray: '#F5F5F5',
     hoverGray: '#E5E5E5',
+    success: '#4CAF50',
+    lightSuccess: '#E8F5E8',
+    error: '#F44336',
+    lightError: '#FFEBEE',
+    lightPrimary: '#E3E8FF',
   },
   fonts: {
     primary: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",

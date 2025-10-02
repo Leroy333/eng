@@ -1,4 +1,4 @@
-import { createStore, createEvent, createEffect } from 'effector'
+import { createStore, createEvent, createEffect, combine } from 'effector'
 
 export interface Topic {
   id: string
@@ -15,6 +15,8 @@ export interface Topic {
 // События
 export const loadTopics = createEvent()
 export const setTopics = createEvent<Topic[]>()
+export const addTopic = createEvent<Topic>()
+export const setSearchQuery = createEvent<string>()
 
 // Эффект для загрузки тем из API
 export const loadTopicsFx = createEffect(async () => {
@@ -55,6 +57,36 @@ export const $topics = createStore<Topic[]>([])
     console.log('📝 Store topics установлен вручную:', topics.length, 'тем')
     return topics
   })
+  .on(addTopic, (topics, newTopic) => {
+    console.log('➕ Добавляем новый топик в store:', newTopic.name)
+    return [...topics, newTopic]
+  })
+
+// Store для поискового запроса
+export const $searchQuery = createStore<string>('')
+  .on(setSearchQuery, (_, query) => {
+    console.log('🔍 Поисковый запрос обновлен:', query)
+    return query
+  })
+
+// Вычисляемый store для отфильтрованных топиков
+export const $filteredTopics = combine(
+  $topics,
+  $searchQuery,
+  (topics, searchQuery) => {
+    if (!searchQuery.trim()) {
+      console.log('🔍 Поиск пустой, показываем все топики')
+      return topics
+    }
+    
+    const filtered = topics.filter(topic => 
+      topic.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      topic.id.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    console.log(`🔍 Найдено топиков по запросу "${searchQuery}":`, filtered.length)
+    return filtered
+  }
+)
 
 // Автоматическая загрузка при инициализации
 loadTopicsFx()

@@ -19,6 +19,10 @@ export interface Word {
 export const loadWords = createEvent()
 export const loadWordsByTopic = createEvent<string>()
 export const setWords = createEvent<Word[]>()
+export const nextWord = createEvent()
+export const previousWord = createEvent()
+export const resetWordIndex = createEvent()
+export const setWordIndex = createEvent<number>()
 
 // Эффект для загрузки всех слов из API
 export const loadWordsFx = createEffect(async () => {
@@ -74,6 +78,13 @@ export const loadWordsByTopicFx = createEffect(async (topicId: string) => {
     return []
   }
 })
+
+// Store для навигации по словам
+export const $currentWordIndex = createStore<number>(0)
+  .on(nextWord, (index, _) => index + 1)
+  .on(previousWord, (index, _) => Math.max(0, index - 1))
+  .on(resetWordIndex, () => 0)
+  .on(setWordIndex, (_, index) => index)
 
 // Store
 export const $words = createStore<Word[]>([])

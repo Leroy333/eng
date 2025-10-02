@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react'
 import styled from 'styled-components'
 import { useUnit } from 'effector-react'
-import { $words, loadWordsByTopicFx } from '../store/words'
+import { $words, loadWordsByTopicFx, $currentWordIndex, nextWord, previousWord, resetWordIndex, setWordIndex } from '../store/words'
 import { $topics } from '../store/topics'
-import { $selectedTopicId, setCurrentPage } from '../store/app'
-import { ArrowLeft, ChevronLeft, ChevronRight, RotateCw, Shuffle } from 'lucide-react'
+import { $selectedTopicId, $recommendedWords, loadRecommendedWordsFx, $overallProgress, loadOverallProgress, markRecommendedWordAsLearned, setCurrentPage } from '../store/app'
+import { $wordsProgress, $currentTopicProgress, markWordAsLearned, loadWordsProgress, loadTopicProgress } from '../store/progress'
+import { ArrowLeft, ChevronLeft, ChevronRight, RotateCw, Shuffle, Check } from 'lucide-react'
 import { LoadingSpinner } from './LoadingSpinner'
 
 const WordCardContainer = styled.div`
@@ -270,45 +271,240 @@ const ProgressNumber = styled.div`
   color: ${({ theme }) => theme.colors.light};
 `
 
+const ProgressBarContainer = styled.div`
+  background: ${({ theme }) => theme.colors.light};
+  border-radius: ${({ theme }) => theme.borderRadius.large};
+  margin: ${({ theme }) => theme.spacing.xl};
+  padding: ${({ theme }) => theme.spacing.xl};
+
+  ${({ theme }) => theme.media.mobile} {
+    margin: ${({ theme }) => theme.spacing.md};
+    padding: ${({ theme }) => theme.spacing.lg};
+  }
+`
+
+const ProgressBarHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+`
+
+const ProgressBarTitle = styled.h3`
+  font-size: ${({ theme }) => theme.fontSize.lg};
+  font-weight: ${({ theme }) => theme.fontWeight.bold};
+  color: ${({ theme }) => theme.colors.dark};
+  margin: 0;
+`
+
+const ProgressBarStats = styled.div`
+  font-size: ${({ theme }) => theme.fontSize.sm};
+  color: ${({ theme }) => theme.colors.gray};
+`
+
+const ProgressBar = styled.div`
+  width: 100%;
+  height: 8px;
+  background: ${({ theme }) => theme.colors.lightGray};
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+`
+
+const ProgressBarFill = styled.div<{ $percentage: number }>`
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+  width: ${({ $percentage }) => $percentage}%;
+  transition: width 0.3s ease;
+`
+
+const ProgressBarPercentage = styled.div`
+  font-size: ${({ theme }) => theme.fontSize.sm};
+  color: ${({ theme }) => theme.colors.gray};
+  text-align: center;
+`
+
+const LearningButtons = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.md};
+  justify-content: center;
+  margin-top: ${({ theme }) => theme.spacing.md};
+`
+
+const LearningButton = styled.button<{ $variant: 'learned' }>`
+  background: #4CAF50;
+  border: none;
+  border-radius: ${({ theme }) => theme.borderRadius.medium};
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  color: white;
+  font-size: ${({ theme }) => theme.fontSize.sm};
+  font-weight: ${({ theme }) => theme.fontWeight.medium};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+  transition: all 0.2s;
+
+  &:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`
+
 export const WordCardScreen: React.FC = () => {
   const words = useUnit($words)
   const topics = useUnit($topics)
   const selectedTopicId = useUnit($selectedTopicId)
+  const recommendedWords = useUnit($recommendedWords)
+  const overallProgress = useUnit($overallProgress)
+  const wordsProgress = useUnit($wordsProgress)
+  const currentTopicProgress = useUnit($currentTopicProgress)
+  const currentWordIndex = useUnit($currentWordIndex)
   const isLoading = useUnit(loadWordsByTopicFx.pending)
-  const [currentWordIndex, setCurrentWordIndex] = useState(0)
+  const isRecommendedLoading = useUnit(loadRecommendedWordsFx.pending)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isRandomOrder, setIsRandomOrder] = useState(false)
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([])
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [pressedButtons, setPressedButtons] = useState<Set<string>>(new Set())
 
   const selectedTopic = topics.find(topic => topic.id === selectedTopicId)
-  const topicWords = words.filter(word => word.topic_id === selectedTopicId)
+  
+  // Определяем, какие слова использовать
+  const isRecommendedMode = !selectedTopicId
+  const sourceWords = isRecommendedMode ? recommendedWords : words.filter(word => word.topic_id === selectedTopicId)
+  
+  // Фильтруем слова, исключая изученные (для всех режимов)
+  const availableWords = sourceWords.filter(word => {
+    if (isRecommendedMode) {
+      // В режиме рекомендованных слов проверяем статус из самих рекомендованных слов
+      // Дополнительно проверяем, не изучено ли слово в базе данных
+      const progress = wordsProgress.find(p => p.word_id === word.id)
+      return word.status !== 'learned' && !progress?.learned
+    } else {
+      // В обычном режиме используем wordsProgress
+      const progress = wordsProgress.find(p => p.word_id === word.id)
+      return !progress?.learned
+    }
+  })
   
   // Получаем текущее слово с учетом случайного порядка
   const getCurrentWord = () => {
+    console.log('🔍 Получение текущего слова:', {
+      currentWordIndex,
+      availableWordsLength: availableWords.length,
+      isRandomOrder,
+      shuffledIndicesLength: shuffledIndices.length
+    })
+    
     if (isRandomOrder && shuffledIndices.length > 0) {
       const actualIndex = shuffledIndices[currentWordIndex]
-      return topicWords[actualIndex]
+      const word = availableWords[actualIndex]
+      console.log('🎲 Случайный порядок:', { actualIndex, word: word?.russian })
+      return word
     }
-    return topicWords[currentWordIndex]
+    const word = availableWords[currentWordIndex]
+    console.log('📝 Обычный порядок:', { word: word?.russian })
+    return word
   }
   
   const currentWord = getCurrentWord()
+  
+  // Проверяем, является ли текущее слово последним
+  const isLastWord = currentWordIndex === availableWords.length - 1
+  
+  // Загружаем прогресс при смене темы
+  useEffect(() => {
+    if (selectedTopicId) {
+      const userId = 1; // Временно используем ID 1
+      loadWordsProgress({ userId, topicId: selectedTopicId })
+      loadTopicProgress({ userId, topicId: selectedTopicId })
+    } else {
+      // Загружаем рекомендованные слова и общий прогресс если нет выбранного топика
+      const userId = 1; // Временно используем ID 1
+      loadRecommendedWordsFx(userId)
+      loadOverallProgress(userId)
+      
+      // Загружаем прогресс для всех слов в рекомендованном режиме
+      // Это нужно для правильной фильтрации изученных слов
+      loadWordsProgress({ userId, topicId: 'all' })
+    }
+  }, [selectedTopicId])
+
+  // Обновляем прогресс при изменении индекса слова
+  useEffect(() => {
+    if (selectedTopicId) {
+      const userId = 1; // Временно используем ID 1
+      loadWordsProgress({ userId, topicId: selectedTopicId })
+      loadTopicProgress({ userId, topicId: selectedTopicId })
+    }
+  }, [currentWordIndex, selectedTopicId])
+
+  // Корректируем индекс при изменении списка доступных слов
+  useEffect(() => {
+    console.log('🔍 Проверка индекса:', { 
+      currentWordIndex, 
+      availableWordsLength: availableWords.length,
+      availableWords: availableWords.map(w => w.russian)
+    })
+    
+    if (availableWords.length === 0) {
+      // Если нет доступных слов, ничего не делаем
+      return
+    }
+    
+    if (currentWordIndex >= availableWords.length) {
+      console.log('🔄 Корректируем индекс слова, так как текущий индекс больше количества доступных слов')
+      // Если текущий индекс больше количества слов, уменьшаем его на 1
+      // Это происходит когда слово исчезло из списка
+      const newIndex = Math.max(0, currentWordIndex - 1)
+      setWordIndex(newIndex)
+    }
+  }, [availableWords.length, currentWordIndex, availableWords])
+
+  // Сброс нажатых кнопок при изменении списка доступных слов (когда слово исчезло)
+  useEffect(() => {
+    console.log('🔄 Список доступных слов изменился, сбрасываем нажатые кнопки')
+    setPressedButtons(new Set())
+  }, [availableWords.length])
 
   // Сброс состояния при смене темы
   useEffect(() => {
-    setCurrentWordIndex(0)
+    resetWordIndex()
     setIsFlipped(false)
     setIsRandomOrder(false)
     setShuffledIndices([])
     setIsTransitioning(false)
+    setPressedButtons(new Set())
   }, [selectedTopicId])
+
+  // Сброс нажатых кнопок при смене слова
+  useEffect(() => {
+    setPressedButtons(new Set())
+  }, [currentWordIndex])
+
+  // Сброс нажатых кнопок при смене текущего слова (когда слово действительно изменилось)
+  useEffect(() => {
+    if (currentWord) {
+      console.log('🔄 Слово изменилось, сбрасываем нажатые кнопки:', currentWord.russian)
+      setPressedButtons(new Set())
+    }
+  }, [currentWord?.id])
 
   // Управляем переходом при смене слова
   useLayoutEffect(() => {
-    if (isFlipped) {
-      setIsFlipped(false)
-    }
+    // Сбрасываем карточку при смене слова
+    setIsFlipped(false)
     // Устанавливаем флаг перехода
     setIsTransitioning(true)
     // Сбрасываем флаг перехода после завершения анимации
@@ -328,12 +524,11 @@ export const WordCardScreen: React.FC = () => {
   }
 
   const handleNext = () => {
-    if (currentWordIndex < topicWords.length - 1) {
-
+    if (currentWordIndex < availableWords.length - 1) {
       // Сначала принудительно сбрасываем карточку
       setIsFlipped(false)
-      // Затем меняем слово
-      setCurrentWordIndex(currentWordIndex + 1)
+      // Затем меняем слово через Effector
+      nextWord()
     }
   }
 
@@ -341,23 +536,23 @@ export const WordCardScreen: React.FC = () => {
     if (currentWordIndex > 0) {
       // Сначала принудительно сбрасываем карточку
       setIsFlipped(false)
-      // Затем меняем слово
-      setCurrentWordIndex(currentWordIndex - 1)
+      // Затем меняем слово через Effector
+      previousWord()
     }
   }
 
   const handleReset = () => {
     // Сначала принудительно сбрасываем карточку
     setIsFlipped(false)
-    // Затем меняем слово
-    setCurrentWordIndex(0)
+    // Затем сбрасываем индекс через Effector
+    resetWordIndex()
   }
 
   const handleShuffle = () => {
-    if (topicWords.length === 0) return
+    if (availableWords.length === 0) return
     
     // Создаем массив индексов и перемешиваем его с помощью алгоритма Fisher-Yates
-    const indices = Array.from({ length: topicWords.length }, (_, i) => i)
+    const indices = Array.from({ length: availableWords.length }, (_, i) => i)
     const shuffled = [...indices]
     
     // Fisher-Yates shuffle
@@ -371,7 +566,7 @@ export const WordCardScreen: React.FC = () => {
     // Затем меняем состояние
     setShuffledIndices(shuffled)
     setIsRandomOrder(true)
-    setCurrentWordIndex(0)
+    resetWordIndex()
     
     console.log('🔀 Слова перемешаны в случайном порядке:', shuffled)
   }
@@ -382,12 +577,76 @@ export const WordCardScreen: React.FC = () => {
     // Затем меняем состояние
     setIsRandomOrder(false)
     setShuffledIndices([])
-    setCurrentWordIndex(0)
+    resetWordIndex()
     
     console.log('📝 Возвращен обычный порядок слов')
   }
 
-  if (isLoading) {
+  const handleMarkAsLearned = () => {
+    if (currentWord) {
+      const userId = 1; // Временно используем ID 1
+      console.log('🎯 Нажата кнопка "Выучил" для слова:', currentWord.russian, 'ID:', currentWord.id)
+      
+      // Сразу блокируем кнопку
+      setPressedButtons(prev => new Set([...prev, 'learned']))
+      
+      // Если карточка перевернута, переворачиваем её обратно
+      if (isFlipped) {
+        setIsFlipped(false)
+      }
+      
+      markWordAsLearned({ userId, wordId: currentWord.id })
+      console.log('✅ Слово отмечено как изученное:', currentWord.russian)
+      
+      // Если это режим рекомендованных слов, обновляем статус слова в store
+      if (isRecommendedMode) {
+        markRecommendedWordAsLearned(currentWord.id)
+      }
+      
+      // Обновляем прогресс и переходим к следующему слову с небольшой задержкой
+      setTimeout(() => {
+        if (selectedTopicId) {
+          loadWordsProgress({ userId, topicId: selectedTopicId })
+          loadTopicProgress({ userId, topicId: selectedTopicId })
+          // НЕ переходим к следующему слову - остаемся на той же позиции
+          // Слово исчезнет из списка, и мы автоматически увидим следующее
+        } else {
+          // Если это режим рекомендованных слов, обновляем общий прогресс и рекомендованные слова
+          loadOverallProgress(userId)
+          
+          // Перезагружаем рекомендованные слова с сервера для получения актуального списка
+          loadRecommendedWordsFx(userId)
+          // В режиме рекомендованных слов НЕ переходим к следующему слову
+          // Слово исчезнет из списка, и мы автоматически увидим следующее
+        }
+      }, 200)
+      
+      // Показываем краткую анимацию успеха
+      setIsTransitioning(true)
+      setTimeout(() => {
+        setIsTransitioning(false)
+      }, 500)
+    }
+  }
+
+
+  const getCurrentWordProgress = () => {
+    if (!currentWord) return null
+    const progress = wordsProgress.find(p => p.word_id === currentWord.id)
+    console.log('🔍 Прогресс текущего слова:', { wordId: currentWord.id, progress, allProgress: wordsProgress })
+    return progress
+  }
+
+  // Проверяем, заблокирована ли кнопка "Выучил" (либо по прогрессу, либо по локальному состоянию)
+  const isButtonPressed = (buttonType: 'learned') => {
+    const progress = getCurrentWordProgress()
+    const isPressedLocally = pressedButtons.has(buttonType)
+    const isPressedInProgress = progress?.learned
+    
+    return isPressedLocally || isPressedInProgress
+  }
+
+  if (isLoading || isRecommendedLoading) {
     return (
       <WordCardContainer>
         <Header>
@@ -396,8 +655,8 @@ export const WordCardScreen: React.FC = () => {
               <ArrowLeft size={20} />
             </BackButton>
             <TopicInfo>
-              <TopicIcon>{selectedTopic?.icon || '📚'}</TopicIcon>
-              <TopicName>{selectedTopic?.name || 'Загрузка...'}</TopicName>
+              <TopicIcon>{isRecommendedMode ? '🎯' : (selectedTopic?.icon || '📚')}</TopicIcon>
+              <TopicName>{isRecommendedMode ? 'Рекомендованные слова' : (selectedTopic?.name || 'Загрузка...')}</TopicName>
             </TopicInfo>
           </HeaderContent>
         </Header>
@@ -406,7 +665,7 @@ export const WordCardScreen: React.FC = () => {
     )
   }
 
-  if (!selectedTopic || !currentWord) {
+  if (!selectedTopic && !isRecommendedMode) {
     return (
       <WordCardContainer>
         <Header>
@@ -424,6 +683,73 @@ export const WordCardScreen: React.FC = () => {
     )
   }
 
+  // Показываем сообщение о завершении, если нет доступных слов
+  if (availableWords.length === 0) {
+    return (
+      <WordCardContainer>
+        <Header>
+          <HeaderContent>
+            <BackButton onClick={handleBack}>
+              <ArrowLeft size={20} />
+            </BackButton>
+            <TopicInfo>
+            <TopicIcon>{selectedTopic?.icon || '📚'}</TopicIcon>
+            <TopicName>{selectedTopic?.name || 'Топик'}</TopicName>
+            </TopicInfo>
+          </HeaderContent>
+        </Header>
+        <CardSection>
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎉</div>
+            <h2 style={{ color: '#4CAF50', marginBottom: '1rem' }}>Поздравляем!</h2>
+            <p style={{ color: '#666', fontSize: '1.1rem', lineHeight: '1.5' }}>
+              Вы изучили все слова в теме "{selectedTopic?.name || 'топике'}"!
+            </p>
+            <button 
+              onClick={handleBack}
+              style={{
+                background: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px 24px',
+                fontSize: '1rem',
+                cursor: 'pointer',
+                marginTop: '1rem'
+              }}
+            >
+              Вернуться к темам
+            </button>
+          </div>
+        </CardSection>
+      </WordCardContainer>
+    )
+  }
+
+  if (!currentWord) {
+    return (
+      <WordCardContainer>
+        <Header>
+          <HeaderContent>
+            <BackButton onClick={handleBack}>
+              <ArrowLeft size={20} />
+            </BackButton>
+            <TopicInfo>
+            <TopicIcon>{selectedTopic?.icon || '📚'}</TopicIcon>
+            <TopicName>{selectedTopic?.name || 'Топик'}</TopicName>
+            </TopicInfo>
+          </HeaderContent>
+        </Header>
+        <CardSection>
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📚</div>
+            <h2 style={{ color: '#666', marginBottom: '1rem' }}>Загрузка слова...</h2>
+          </div>
+        </CardSection>
+      </WordCardContainer>
+    )
+  }
+
   return (
     <WordCardContainer>
       <Header>
@@ -432,9 +758,9 @@ export const WordCardScreen: React.FC = () => {
             <ArrowLeft size={20} />
           </BackButton>
           <TopicInfo>
-            <TopicIcon>{selectedTopic.icon}</TopicIcon>
+            <TopicIcon>{isRecommendedMode ? '🎯' : (selectedTopic?.icon || '📚')}</TopicIcon>
             <TopicName>
-              {selectedTopic.name}
+              {isRecommendedMode ? 'Рекомендованные слова' : (selectedTopic?.name || 'Топик')}
               {isRandomOrder && <span style={{ marginLeft: '8px', fontSize: '0.8em', opacity: 0.7 }}>🔀</span>}
             </TopicName>
           </TopicInfo>
@@ -478,6 +804,61 @@ export const WordCardScreen: React.FC = () => {
         </WordCard>
       </CardSection>
 
+      {(currentTopicProgress || (isRecommendedMode && overallProgress)) && (
+        <ProgressBarContainer>
+          <ProgressBarHeader>
+            <ProgressBarTitle>
+              {isRecommendedMode ? 'Общий прогресс изучения' : 'Прогресс изучения'}
+            </ProgressBarTitle>
+            <ProgressBarStats>
+              {isRecommendedMode && overallProgress ? (
+                `${overallProgress.learned_words}/${overallProgress.total_words} изучено`
+              ) : currentTopicProgress ? (
+                `${currentTopicProgress.learned_words}/${currentTopicProgress.total_words} изучено`
+              ) : (
+                '0/0 изучено'
+              )}
+            </ProgressBarStats>
+          </ProgressBarHeader>
+          <ProgressBar>
+            <ProgressBarFill 
+              $percentage={
+                isRecommendedMode && overallProgress 
+                  ? overallProgress.progress_percentage 
+                  : currentTopicProgress?.progress_percentage || 0
+              } 
+            />
+          </ProgressBar>
+          <ProgressBarPercentage>
+            {isRecommendedMode && overallProgress 
+              ? overallProgress.progress_percentage 
+              : currentTopicProgress?.progress_percentage || 0}%
+          </ProgressBarPercentage>
+          {isRecommendedMode && overallProgress && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              fontSize: '0.9rem', 
+              color: '#666',
+              marginTop: '8px'
+            }}>
+              <span>🆕 Новых: {overallProgress.new_words}</span>
+              <span>✅ Изучены: {overallProgress.learned_words}</span>
+            </div>
+          )}
+          <LearningButtons>
+            <LearningButton 
+              $variant="learned" 
+              onClick={handleMarkAsLearned}
+              disabled={isButtonPressed('learned')}
+            >
+              <Check size={16} />
+              Выучил
+            </LearningButton>
+          </LearningButtons>
+        </ProgressBarContainer>
+      )}
+
       <Controls>
         <ControlButton 
           onClick={handlePrevious} 
@@ -489,7 +870,17 @@ export const WordCardScreen: React.FC = () => {
 
         <ProgressInfo>
           <ProgressText>слово</ProgressText>
-          <ProgressNumber>{currentWordIndex + 1} / {topicWords.length}</ProgressNumber>
+          <ProgressNumber>{currentWordIndex + 1} / {availableWords.length}</ProgressNumber>
+          {isLastWord && (
+            <div style={{ 
+              fontSize: '0.8rem', 
+              color: '#4CAF50', 
+              marginTop: '4px',
+              fontWeight: 'bold'
+            }}>
+              Последнее слово!
+            </div>
+          )}
         </ProgressInfo>
 
         <ControlButton 
@@ -509,7 +900,7 @@ export const WordCardScreen: React.FC = () => {
 
         <ControlButton 
           onClick={handleNext} 
-          disabled={currentWordIndex === topicWords.length - 1}
+          disabled={currentWordIndex === availableWords.length - 1}
           title="Следующее слово"
         >
           <ChevronRight size={24} />
